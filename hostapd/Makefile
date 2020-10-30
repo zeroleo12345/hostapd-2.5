@@ -3,12 +3,17 @@ CC=gcc
 endif
 
 ifndef CFLAGS
-CFLAGS = -MMD -O2 -Wall -g
+# zlx start
+# CFLAGS = -MMD -O2 -Wall -g
+CFLAGS = -MMD -Wall -g -ggdb -fPIC
+LDFLAGS=-L/usr/local/ssl/lib
+# zlx end
 endif
 
 CFLAGS += $(EXTRA_CFLAGS)
 CFLAGS += -I$(abspath ../src)
 CFLAGS += -I$(abspath ../src/utils)
+
 
 export BINDIR ?= /usr/local/bin/
 
@@ -40,7 +45,14 @@ CFLAGS += -DCONFIG_NATIVE_WINDOWS
 LIBS += -lws2_32
 endif
 
+ifdef test
+OBJS += test_main.o
+ALL=test_hostapd libhostapd.so loader
+else
 OBJS += main.o
+ALL=hostapd hostapd_cli
+endif
+
 OBJS += config_file.o
 
 OBJS += ../src/ap/hostapd.o
@@ -934,8 +946,6 @@ OBJS += ../src/fst/fst_ctrl_iface.o
 endif
 endif
 
-ALL=hostapd hostapd_cli
-
 all: verify_config $(ALL)
 
 Q=@
@@ -984,6 +994,19 @@ BCHECK=../src/drivers/build.hostapd
 hostapd: $(BCHECK) $(OBJS)
 	$(Q)$(CC) $(LDFLAGS) -o hostapd $(OBJS) $(LIBS)
 	@$(E) "  LD " $@
+
+test_hostapd: $(BCHECK) $(OBJS)
+	$(Q)$(CC) $(LDFLAGS) -o test_hostapd $(OBJS) $(LIBS)
+	@$(E) "  LD " $@
+
+loader: loader.c
+	g++ loader.c -ldl -o $@
+	chmod +x loader
+
+libhostapd.so: $(OBJS)
+	@$(E) "  CC  $@ ($^)"
+	$(Q)$(CC) $(LDFLAGS) -o $@ $(CFLAGS) -shared -fPIC $^ $(LIBS)
+	cp libhostapd.so ../../../lib
 
 ifdef CONFIG_WPA_TRACE
 OBJS_c += ../src/utils/trace.o
@@ -1038,6 +1061,7 @@ clean:
 	$(MAKE) -C ../src clean
 	rm -f core *~ *.o hostapd hostapd_cli nt_password_hash hlr_auc_gw
 	rm -f *.d *.gcno *.gcda *.gcov
+	rm -f libhostapd.so loader test_hostapd 2>/dev/null
 	rm -f lcov.info
 	rm -rf lcov-html
 
